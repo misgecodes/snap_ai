@@ -1,0 +1,47 @@
+# Expense Categorization Guide
+
+Categorize each transaction into the most appropriate category based on the merchant, description, and available context.
+
+## Food & Dining
+Restaurants, cafes, coffee shops, takeout, and food delivery.
+
+## Groceries
+Supermarkets, grocery stores, markets, and household food purchases.
+
+## Transport
+Fuel, ride-hailing, taxis, public transit, parking, tolls, and vehicle-related transport costs.
+
+## Housing
+Rent, utilities, internet, home maintenance, and housing-related expenses.
+
+## Subscriptions
+Software, SaaS, streaming, memberships, and other recurring services.
+
+## Business/Work
+Client expenses, business tools, coworking, office expenses, work travel, and other work-related spending.
+
+## Health
+Pharmacies, clinics, doctors, medicine, dental, and other healthcare spending.
+
+## Shopping
+Clothing, electronics, household items, and general retail purchases.
+
+## Entertainment/Leisure
+Movies, games, events, hobbies, sports, and recreational activities.
+
+## Savings/Investments
+Transfers to savings accounts, investments, stocks, funds, or other wealth-building accounts.
+
+## Mobile Money/Bank Fees
+Mobile money charges, bank fees, transfer fees, ATM fees, and currency exchange fees.
+
+## Miscellaneous/Uncategorized/Other
+Use when a transaction does not clearly fit any other category.
+
+### Rules
+1. Choose the most appropriate category based on the available transaction context.
+2. Prefer the transaction description over assumptions based only on the merchant name.
+3. Categorize business-related spending as Business/Work when the business purpose is clear.
+4. Categorize money moved between accounts as Savings/Investments when intended for saving/investing; otherwise treat as a transfer.
+5. Do not classify income as an expense.
+6. If uncertain or no category clearly applies, use Miscellaneous/Uncategorized rather than guessing.
