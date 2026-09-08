@@ -1,17 +1,17 @@
 # from type.graph_state import GraphState
-from config.settings import OpenAI_API_KEY
+from config.settings import OPENAI_API_KEY
 from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
-from nodes.extract_from_image import extract_from_image
-from nodes.retrieve_catagory import retrieve_category
+from app.ai.nodes.extract_from_image import extract_from_image
+from app.ai.nodes.retrieve_catagory import retrieve_category
 from langgraph.graph import StateGraph, END
-from states.receipt_graph_state import ReceiptGraphState
+from app.ai.states.receipt_graph_state import ReceiptGraphState
 from functools import partial
 
 
-llm = ChatOpenAI(model="gpt-4.1-mini", openai_api_key=OpenAI_API_KEY)
+llm = ChatOpenAI(model="gpt-4.1-mini", openai_api_key=OPENAI_API_KEY)
 
 
 
