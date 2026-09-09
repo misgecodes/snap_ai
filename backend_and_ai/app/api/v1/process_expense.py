@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.expense import Expense
-from app.schemas.expense import ExpenseCreate, ExpenseProcessRequest, ExpenseProcessResponse
+from app.schemas.expense import ExpenseCreate, ExpenseProcessRequest, ExpenseProcessResponse, ExpenseListResponse, CategorySummary
+from collections import defaultdict
 from app.services.ai_service import process_receipt
 
 logger = logging.getLogger(__name__)
@@ -73,3 +74,27 @@ def process_receipt_endpoint(
 
 
 
+@router.get("/expenses", response_model=ExpenseListResponse)
+def list_expenses(db: Session = Depends(get_db)):
+    expenses = db.query(Expense).order_by(Expense.created_at.desc()).all()
+
+    # category -> currency -> running total
+    grouped: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    counts: dict[str, int] = defaultdict(int)
+
+    for exp in expenses:
+        category = exp.category or "Uncategorized"
+        currency = exp.currency or "USD"
+        grouped[category][currency] += exp.amount or 0.0
+        counts[category] += 1
+
+    summary = [
+        CategorySummary(
+            category=category,
+            totals_by_currency=dict(currency_totals),
+            count=counts[category],
+        )
+        for category, currency_totals in grouped.items()
+    ]
+
+    return ExpenseListResponse(expenses=expenses, summary=summary)
