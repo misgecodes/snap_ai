@@ -273,3 +273,16 @@ Configure the Google OAuth client with the frontend origin used during developme
 - Authorized JavaScript origin: `http://localhost:3000`
 - Authorized JavaScript origin: your deployed frontend URL
 
+## AI Evaluation
+
+The receipt extraction and categorization pipeline has been systematically
+evaluated against manually verified ground truth. See [EVALUATION.md](./EVALUATION.md)
+for full results, including per-field accuracy, identified failure modes
+(e.g. a hallucinated date on a receipt with no visible date, and a
+merchant-vs-recipient extraction ambiguity on transfer receipts), and
+planned fixes.
+
+**Summary:** Amount 100%, Currency 100%, Date 89%, Category 78%, Merchant 22%
+(see report for why merchant accuracy reflects a design ambiguity rather
+than random failure).
+
