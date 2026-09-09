@@ -4,11 +4,20 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
+from collections import defaultdict
+
 from app.db.session import get_db
 from app.models.expense import Expense
-from app.schemas.expense import ExpenseCreate, ExpenseProcessRequest, ExpenseProcessResponse, ExpenseListResponse, CategorySummary, PeriodSummaryResponse
-from collections import defaultdict
+from app.schemas.expense import (
+    ExpenseCreate,
+    ExpenseProcessRequest,
+    ExpenseProcessResponse,
+    ExpenseListResponse,
+    CategorySummary,
+    PeriodSummaryResponse,
+)
 from app.services.ai_service import process_receipt
+from app.auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +38,7 @@ def _parse_expense_date(raw_date: str | None) -> date | None:
 def process_receipt_endpoint(
     payload: ExpenseProcessRequest,
     db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ):
     image_url = str(payload.image_url)
     logger.info("Starting receipt processing for image URL: %s", image_url)
@@ -43,6 +53,7 @@ def process_receipt_endpoint(
     try:
         expense_data = ExpenseCreate(image_url=payload.image_url, **result)
         expense = Expense(
+            user_id=current_user["id"],
             image_url=str(expense_data.image_url),
             merchant=expense_data.merchant,
             reason=expense_data.reason,
@@ -72,13 +83,18 @@ def process_receipt_endpoint(
     return result
 
 
-
-
 @router.get("/expenses", response_model=ExpenseListResponse)
-def list_expenses(db: Session = Depends(get_db)):
-    expenses = db.query(Expense).order_by(Expense.created_at.desc()).all()
+def list_expenses(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    expenses = (
+        db.query(Expense)
+        .filter(Expense.user_id == current_user["id"])
+        .order_by(Expense.created_at.desc())
+        .all()
+    )
 
-    # category -> currency -> running total
     grouped: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     counts: dict[str, int] = defaultdict(int)
 
@@ -100,19 +116,17 @@ def list_expenses(db: Session = Depends(get_db)):
     return ExpenseListResponse(expenses=expenses, summary=summary)
 
 
-
-
-
-
 @router.get("/expenses-summary", response_model=PeriodSummaryResponse)
-def get_monthly_summary(db: Session = Depends(get_db)):
+def get_monthly_summary(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     today = date.today()
     start_date = today.replace(day=1)
 
-    # Include expenses where the extracted date falls this month,
-    # OR (when no date was extracted) where it was created this month.
     expenses = (
         db.query(Expense)
+        .filter(Expense.user_id == current_user["id"])
         .filter(
             or_(
                 Expense.expense_date >= start_date,

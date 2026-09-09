@@ -8,6 +8,28 @@ import type { CategorySummary, Expense, ExpensePeriodSummary, ProcessExpenseResp
 
 type FlowState = "idle" | "uploading" | "processing" | "success" | "error";
 
+declare global {
+  interface Window {
+    google?: {
+      accounts?: {
+        id?: {
+          initialize: (config: { client_id: string; callback: (response: { credential?: string }) => void }) => void;
+          renderButton: (parent: HTMLElement, options: { theme: "outline" | "filled_blue" | "filled_black"; size: "small" | "medium" | "large"; text: "signin_with" | "signup_with" | "continue_with" | "signin"; shape?: "rectangular" | "pill" | "circle" | "square"; width?: number }) => void;
+        };
+      };
+    };
+  }
+}
+
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+function maskValue(value: string, visibleCharacters = 8) {
+  if (!value) return "<empty>";
+  if (value.length <= visibleCharacters) return `${value.slice(0, 3)}...`;
+  return `${value.slice(0, visibleCharacters)}...${value.slice(-4)}`;
+}
+
 const categoryStyles: Record<string, string> = {
   "Food & Dining": "bg-[#fff0e8] text-[#e45b35]", Transport: "bg-[#e9f1f8] text-[#3d6588]", Shopping: "bg-[#f0ebfa] text-[#7454a5]", Groceries: "bg-[#e8f4ed] text-[#377957]", Subscriptions: "bg-[#f1f0ed] text-[#65645d]",
 };
@@ -34,6 +56,7 @@ function categoryClass(category: string | null) { return categoryStyles[category
 
 export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [flowState, setFlowState] = useState<FlowState>("idle");
   const [result, setResult] = useState<ProcessExpenseResponse | null>(null);
@@ -42,7 +65,140 @@ export default function Home() {
   const [periodSummary, setPeriodSummary] = useState<ExpensePeriodSummary | null>(null);
   const [errorStage, setErrorStage] = useState<FlowState>("error");
   const [errorMessage, setErrorMessage] = useState("");
+  const [currentUser, setCurrentUser] = useState<{ email: string; full_name: string } | null>(null);
   const resetFlow = () => { setFlowState("idle"); setResult(null); setErrorMessage(""); setIsSheetOpen(false); };
+
+  const handleGoogleLogin = async (response: { credential?: string }) => {
+    console.info("[Google auth] credential callback received", {
+      hasCredential: Boolean(response?.credential),
+      credentialLength: response?.credential?.length || 0,
+      origin: window.location.origin,
+    });
+
+    if (!response?.credential) {
+      console.error("[Google auth] response missing credential", response);
+      return;
+    }
+
+    try {
+      const endpoint = `${API_URL}/api/v1/auth/google`;
+      console.info("[Google auth] sending credential to backend", {
+        endpoint,
+        clientId: maskValue(GOOGLE_CLIENT_ID),
+        credentialLength: response.credential.length,
+      });
+      const startedAt = performance.now();
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: response.credential }),
+      });
+
+      const responseText = await res.text();
+      console.info("[Google auth] backend response received", {
+        status: res.status,
+        ok: res.ok,
+        durationMs: Math.round(performance.now() - startedAt),
+        bodyLength: responseText.length,
+      });
+
+      if (!res.ok) {
+        console.error("[Google auth] backend rejected login", {
+          status: res.status,
+          body: responseText,
+        });
+        throw new Error(`Google login failed with status ${res.status}`);
+      }
+
+      const data = JSON.parse(responseText);
+      localStorage.setItem("access_token", data.access_token);
+      setCurrentUser(data.user);
+      console.info("[Google auth] login successful", {
+        hasAccessToken: Boolean(data.access_token),
+        user: data.user,
+      });
+    } catch (error) {
+      console.error("[Google auth] login error", error);
+      setErrorMessage(error instanceof Error ? error.message : "Google sign-in failed.");
+    }
+  };
+
+  useEffect(() => {
+    console.info("[Google auth] initializing GIS", {
+      origin: window.location.origin,
+      apiUrl: API_URL,
+      clientId: maskValue(GOOGLE_CLIENT_ID),
+      hasClientId: Boolean(GOOGLE_CLIENT_ID),
+      hasGoogleSdk: Boolean(window.google?.accounts?.id),
+    });
+
+    if (!GOOGLE_CLIENT_ID) {
+      console.warn("[Google auth] NEXT_PUBLIC_GOOGLE_CLIENT_ID is not configured.");
+      return;
+    }
+
+    const initializeGoogleButton = () => {
+      const googleId = window.google?.accounts?.id;
+      const buttonContainer = googleButtonRef.current;
+      if (!googleId || !buttonContainer) {
+        console.warn("[Google auth] cannot render GIS button yet", {
+          hasGoogleSdk: Boolean(googleId),
+          hasButtonContainer: Boolean(buttonContainer),
+        });
+        return false;
+      }
+
+      googleId.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleLogin,
+      });
+      buttonContainer.replaceChildren();
+      googleId.renderButton(buttonContainer, {
+        theme: "outline",
+        size: "large",
+        text: "continue_with",
+        shape: "rectangular",
+        width: 190,
+      });
+      console.info("[Google auth] GIS button rendered", {
+        origin: window.location.origin,
+        clientId: maskValue(GOOGLE_CLIENT_ID),
+      });
+      return true;
+    };
+
+    const ensureGoogleScript = () => {
+      const existingScript = document.querySelector("script[src='https://accounts.google.com/gsi/client']");
+      if (existingScript) {
+        console.info("[Google auth] GIS script already exists", {
+          readyState: document.readyState,
+          hasGoogleSdk: Boolean(window.google?.accounts?.id),
+        });
+        initializeGoogleButton();
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        console.info("[Google auth] GIS script loaded", {
+          origin: window.location.origin,
+          hasGoogleSdk: Boolean(window.google?.accounts?.id),
+        });
+        initializeGoogleButton();
+      };
+      script.onerror = (error) => {
+        console.error("[Google auth] GIS script failed to load", error);
+      };
+      console.info("[Google auth] adding GIS script", script.src);
+      document.body.appendChild(script);
+    };
+
+    ensureGoogleScript();
+
+  }, []);
 
   useEffect(() => {
     Promise.all([getExpenses(), getExpenseSummary()]).then(([expenseList, loadedPeriodSummary]) => {
@@ -71,14 +227,16 @@ export default function Home() {
       setFlowState("error");
     }
   };
+
   const isBusy = flowState === "uploading" || flowState === "processing";
 
   return <main className="min-h-screen bg-[#f6f5f2]">
-    <header className="border-b border-[#deded9] bg-[#f6f5f2]/90 backdrop-blur-md"><div className="mx-auto flex max-w-[1320px] items-center justify-between px-5 py-5 sm:px-8 lg:px-12"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#18212b] text-white"><Sparkles size={17} /></div><span className="text-[18px] font-bold tracking-[-0.04em]">snap<span className="text-[#f2532f]">ai</span></span></div><nav className="hidden items-center gap-8 text-[13px] font-medium text-[#6c7278] md:flex"><a className="text-[#18212b]" href="#overview">Overview</a><a href="#activity">Activity</a><a href="#insights">Insights</a></nav><div className="flex items-center gap-2.5"><button aria-label="Help" className="hidden rounded-full p-2 text-[#7b7e80] hover:bg-white md:block"><CircleHelp size={18} /></button><button className="flex items-center gap-2 rounded-full border border-[#dcdcd7] bg-white px-3 py-1.5 text-[12px] font-semibold"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#ffd9cc] text-[10px] text-[#bc4b2d]">JD</span><span className="hidden sm:block">Jamie Davis</span><ChevronDown size={13} className="text-[#9a9a96]" /></button></div></div></header>
+    <header className="border-b border-[#deded9] bg-[#f6f5f2]/90 backdrop-blur-md"><div className="mx-auto flex max-w-[1320px] items-center justify-between px-5 py-5 sm:px-8 lg:px-12"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#18212b] text-white"><Sparkles size={17} /></div><span className="text-[18px] font-bold tracking-[-0.04em]">snap<span className="text-[#f2532f]">ai</span></span></div><div className="flex items-center gap-2.5"><button aria-label="Help" className="hidden rounded-full p-2 text-[#7b7e80] hover:bg-white md:block"><CircleHelp size={18} /></button>{!currentUser && <div ref={googleButtonRef} id="google-signin-button" className="overflow-hidden rounded-xl bg-white [&_iframe]:block" />}{currentUser && <button className="flex items-center gap-2 rounded-full border border-[#dcdcd7] bg-white px-3 py-1.5 text-[12px] font-semibold"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#ffd9cc] text-[10px] text-[#bc4b2d]">{currentUser.full_name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span><span className="hidden sm:block">{currentUser.full_name}</span><ChevronDown size={13} className="text-[#9a9a96]" /></button>}
+    </div></div></header>
 
     <div className="mx-auto grid max-w-[1320px] gap-8 px-5 py-8 sm:px-8 lg:grid-cols-[220px_1fr] lg:gap-14 lg:px-12 lg:py-12"><aside className="hidden lg:block"><p className="mb-6 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-[#9a9a96]">Workspace</p><div className="space-y-1"><a className="flex items-center gap-3 rounded-xl bg-white px-3 py-2.5 text-[13px] font-semibold shadow-[0_2px_10px_rgba(24,33,43,0.04)]" href="#overview"><LayoutDashboard size={17} className="text-[#f2532f]" /> Overview</a><a className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] text-[#777b7e] hover:bg-white" href="#activity"><ReceiptText size={17} /> Transactions</a><a className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] text-[#777b7e] hover:bg-white" href="#insights"><Sparkles size={17} /> Insights</a></div><div className="mt-12 border-t border-[#deded9] pt-5"><a className="flex items-center gap-3 px-3 py-2.5 text-[13px] text-[#777b7e]" href="#settings"><Settings size={17} /> Settings</a></div></aside>
 
-      <section id="overview" className="min-w-0"><div className="mb-9 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-[13px] text-[#797d80]">{periodSummary ? formatPeriod(periodSummary.start_date, periodSummary.end_date) : "Loading expense period..."}</p><h1 className="font-serif text-[clamp(2.2rem,5vw,3.7rem)] leading-none tracking-[-0.055em] text-[#18212b]">Good morning, Jamie <span className="text-[0.8em]">✦</span></h1><p className="mt-3 max-w-md text-[14px] leading-6 text-[#777b7e]">Your spending, made simple. Snap a receipt and let AI keep things clear.</p></div><button onClick={() => setIsSheetOpen(true)} className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#f2532f] px-5 py-3.5 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(242,83,47,0.18)] transition hover:-translate-y-0.5 hover:bg-[#dc4526] sm:w-auto"><Plus size={17} /> Add expense <ArrowUpRight size={15} className="ml-1 opacity-60" /></button></div>
+      <section id="overview" className="min-w-0"><div className="mb-9 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-[13px] text-[#797d80]">{periodSummary ? formatPeriod(periodSummary.start_date, periodSummary.end_date) : "Loading expense period..."}</p><h1 className="font-serif text-[clamp(2.2rem,5vw,3.7rem)] leading-none tracking-[-0.055em] text-[#18212b]">Hi, Jamie <span className="text-[0.8em]">✦</span></h1><p className="mt-3 max-w-md text-[14px] leading-6 text-[#777b7e]">Your spending, made simple. Snap a receipt and let AI keep things clear.</p></div><button onClick={() => setIsSheetOpen(true)} className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#f2532f] px-5 py-3.5 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(242,83,47,0.18)] transition hover:-translate-y-0.5 hover:bg-[#dc4526] sm:w-auto"><Plus size={17} /> Add expense <ArrowUpRight size={15} className="ml-1 opacity-60" /></button></div>
         <div className={`grid gap-4 ${periodSummary && Object.keys(periodSummary.total_by_currency).length === 1 ? "md:grid-cols-1" : "md:grid-cols-[1.15fr_0.85fr]"}`}><div className={`grid gap-4 ${periodSummary && Object.keys(periodSummary.total_by_currency).length === 1 ? "grid-cols-1" : "sm:grid-cols-2"}`}>{periodSummary ? Object.entries(periodSummary.total_by_currency).map(([currency, total]) => <div key={currency} className="relative overflow-hidden rounded-2xl bg-[#18212b] p-6 text-white sm:p-8"><div className="relative z-10"><div className="mb-10 flex items-center justify-between"><p className="text-[12px] text-[#b8c0c5]">Spent this month</p><span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-semibold text-[#d4dcdf]">{formatPeriod(periodSummary.start_date, periodSummary.end_date)}</span></div><p className="font-serif text-[clamp(2rem,5vw,3.8rem)] leading-none tracking-[-0.06em]">{formatAmount(total, currency)}</p><div className="mt-7 flex items-center gap-2 text-[12px] text-[#aeb8bd]"><span className="font-semibold text-[#d4dcdf]">{periodSummary.total_count} transactions</span><span>in this period</span></div></div><div className="absolute -right-9 -top-16 h-56 w-56 rounded-full border-[26px] border-[#24323d]" /></div>) : <div className="relative overflow-hidden rounded-2xl bg-[#18212b] p-6 text-white sm:p-8"><div className="relative z-10"><p className="text-[12px] text-[#b8c0c5]">Spent this month</p><p className="mt-10 font-serif text-[clamp(2rem,5vw,3.8rem)] leading-none tracking-[-0.06em]">—</p></div></div>} </div><div className="rounded-2xl border border-[#deded9] bg-white p-6 sm:p-8"><div className="flex items-start justify-between"><div><p className="text-[12px] text-[#797d80]">Monthly budget</p><p className="mt-3 font-serif text-4xl tracking-[-0.06em]">$1,200</p></div><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#fff0e8] text-[#f2532f]"><WalletCards size={17} /></div></div><div className="mt-7 h-2 overflow-hidden rounded-full bg-[#f0efeb]"><div className="h-full w-[40%] rounded-full bg-[#f2532f]" /></div><div className="mt-3 flex justify-between text-[11px] text-[#888b8c]"><span>{periodSummary?.total_count ?? "—"} transactions</span><span>{periodSummary ? formatPeriod(periodSummary.start_date, periodSummary.end_date) : "Loading..."}</span></div></div></div>
         <div id="activity" className="mt-10"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-serif text-[25px] tracking-[-0.04em]">Recent activity</h2><p className="mt-1 text-[12px] text-[#929594]">Your latest captured expenses</p></div><button className="flex items-center gap-1.5 text-[12px] font-semibold text-[#f2532f]">View all <ArrowUpRight size={14} /></button></div><div className="overflow-hidden rounded-2xl border border-[#deded9] bg-white"><div className="hidden grid-cols-[1fr_150px_100px] border-b border-[#eeeDE9] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.1em] text-[#a0a19d] sm:grid"><span>Merchant</span><span>Category</span><span className="text-right">Amount</span></div>{expenses.slice(0, 5).map((expense) => <div key={expense.id} className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-[#eeeDE9] px-4 py-4 last:border-0 sm:grid-cols-[1fr_150px_100px] sm:px-5"><div className="flex min-w-0 items-center gap-3"><div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${categoryClass(expense.category)}`}><ReceiptText size={16} /></div><div className="min-w-0"><p className="truncate text-[13px] font-bold">{expense.merchant || "Unknown merchant"}</p><p className="truncate text-[11px] text-[#969997]">{expense.reason || expense.expense_date || "Captured expense"} · {expense.expense_date || expense.created_at.slice(0, 10)}</p></div></div><span className={`hidden w-fit rounded-full px-2.5 py-1 text-[10px] font-semibold sm:block ${categoryClass(expense.category)}`}>{expense.category || "Uncategorized"}</span><p className="text-right text-[13px] font-bold">{formatAmount(expense.amount, expense.currency)}</p></div>)}</div></div>
         <div id="insights" className="mt-10"><div className="mb-4"><h2 className="font-serif text-[25px] tracking-[-0.04em]">Category summary</h2><p className="mt-1 text-[12px] text-[#929594]">Totals and counts from your saved expenses</p></div><div className="grid gap-4 sm:grid-cols-2">{summary.map((item) => <div key={item.category} className="rounded-2xl border border-[#deded9] bg-white p-5"><div className="flex items-start justify-between gap-4"><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${categoryClass(item.category)}`}>{item.category}</span><span className="text-[12px] font-semibold text-[#797d80]">{item.count} {item.count === 1 ? "expense" : "expenses"}</span></div><div className="mt-5 space-y-2">{Object.entries(item.totals_by_currency).map(([currency, total]) => <div key={currency} className="flex items-center justify-between text-[13px]"><span className="text-[#797d80]">{currency}</span><span className="font-bold">{formatAmount(total, currency)}</span></div>)}</div></div>)}</div>{summary.length === 0 && <div className="rounded-2xl border border-dashed border-[#deded9] bg-white p-6 text-center text-[13px] text-[#929594]">Category totals will appear after your first expense.</div>}</div>
