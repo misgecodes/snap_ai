@@ -48,3 +48,11 @@ class CategorySummary(BaseModel):
 class ExpenseListResponse(BaseModel):
     expenses: list[ExpenseResponse]
     summary: list[CategorySummary]
+
+
+class PeriodSummaryResponse(BaseModel):
+    start_date: date_type
+    end_date: date_type
+    total_by_currency: dict[str, float]
+    total_count: int
+    by_category: list[CategorySummary]

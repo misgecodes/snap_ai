@@ -30,3 +30,11 @@ export interface ExpenseListResponse {
   expenses: Expense[];
   summary: CategorySummary[];
 }
+
+export interface ExpensePeriodSummary {
+  start_date: string;
+  end_date: string;
+  total_by_currency: Record<string, number>;
+  total_count: number;
+  by_category: CategorySummary[];
+}

@@ -1,4 +1,4 @@
-import type { ExpenseListResponse, ProcessExpenseResponse } from "@/types/expense";
+import type { ExpenseListResponse, ExpensePeriodSummary, ProcessExpenseResponse } from "@/types/expense";
 
 async function getApiUrl() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -22,4 +22,11 @@ export async function getExpenses(): Promise<ExpenseListResponse> {
   const response = await fetch(`${apiUrl}/api/v1/ai/expenses`, { cache: "no-store" });
   if (!response.ok) throw new Error("SnapAI could not load your expenses.");
   return response.json() as Promise<ExpenseListResponse>;
+}
+
+export async function getExpenseSummary(): Promise<ExpensePeriodSummary> {
+  const apiUrl = await getApiUrl();
+  const response = await fetch(`${apiUrl}/api/v1/ai/expenses-summary`, { cache: "no-store" });
+  if (!response.ok) throw new Error("SnapAI could not load your expense summary.");
+  return response.json() as Promise<ExpensePeriodSummary>;
 }

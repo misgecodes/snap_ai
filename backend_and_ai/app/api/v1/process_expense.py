@@ -3,10 +3,10 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from sqlalchemy import or_, func
 from app.db.session import get_db
 from app.models.expense import Expense
-from app.schemas.expense import ExpenseCreate, ExpenseProcessRequest, ExpenseProcessResponse, ExpenseListResponse, CategorySummary
+from app.schemas.expense import ExpenseCreate, ExpenseProcessRequest, ExpenseProcessResponse, ExpenseListResponse, CategorySummary, PeriodSummaryResponse
 from collections import defaultdict
 from app.services.ai_service import process_receipt
 
@@ -98,3 +98,58 @@ def list_expenses(db: Session = Depends(get_db)):
     ]
 
     return ExpenseListResponse(expenses=expenses, summary=summary)
+
+
+
+
+
+
+@router.get("/expenses-summary", response_model=PeriodSummaryResponse)
+def get_monthly_summary(db: Session = Depends(get_db)):
+    today = date.today()
+    start_date = today.replace(day=1)
+
+    # Include expenses where the extracted date falls this month,
+    # OR (when no date was extracted) where it was created this month.
+    expenses = (
+        db.query(Expense)
+        .filter(
+            or_(
+                Expense.expense_date >= start_date,
+                func.date(Expense.created_at) >= start_date,
+            )
+        )
+        .all()
+    )
+
+    total_by_currency: dict[str, float] = defaultdict(float)
+    grouped: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    counts: dict[str, int] = defaultdict(int)
+
+    for exp in expenses:
+        category = exp.category or "Uncategorized"
+        currency = (exp.currency or "USD").strip().upper()
+        if currency == "$":
+            currency = "USD"
+        amount = exp.amount or 0.0
+
+        total_by_currency[currency] += amount
+        grouped[category][currency] += amount
+        counts[category] += 1
+
+    by_category = [
+        CategorySummary(
+            category=category,
+            totals_by_currency=dict(currency_totals),
+            count=counts[category],
+        )
+        for category, currency_totals in grouped.items()
+    ]
+
+    return PeriodSummaryResponse(
+        start_date=start_date,
+        end_date=today,
+        total_by_currency=dict(total_by_currency),
+        total_count=len(expenses),
+        by_category=by_category,
+    )
