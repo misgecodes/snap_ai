@@ -18,7 +18,7 @@ def extract_from_image(state: ReceiptGraphState) -> dict:
     structured_llm = llm.with_structured_output(ExtractedReceipt)
 
     response=structured_llm.invoke([HumanMessage(content=
-                                        [{"type": "text", "text": "Extract the merchant, amount, date, and reason from the receipt image."},
+                                        [{"type": "text", "text": "Extract the merchant, amount, date, and reason from the receipt image. if not date is found return empty string."},
                                          {"type": "image_url", "image_url": {"url": state["image_url"]}}
                                              ])
                                         ])
