@@ -6,27 +6,44 @@ async function getApiUrl() {
   return apiUrl;
 }
 
+function getAuthHeaders() {
+  const token = localStorage.getItem("access_token");
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
+function handleApiResponse(response: Response, message: string) {
+  if (response.status === 401) {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("snapai_user");
+    window.location.replace("/login");
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+  if (!response.ok) throw new Error(message);
+}
+
 export async function processExpense(imageUrl: string): Promise<ProcessExpenseResponse> {
   const apiUrl = await getApiUrl();
   const response = await fetch(`${apiUrl}/api/v1/ai/process-expense`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({ image_url: imageUrl }),
   });
-  if (!response.ok) throw new Error("SnapAI could not analyze the receipt.");
+  handleApiResponse(response, "SnapAI could not analyze the receipt.");
   return response.json() as Promise<ProcessExpenseResponse>;
 }
 
 export async function getExpenses(): Promise<ExpenseListResponse> {
   const apiUrl = await getApiUrl();
-  const response = await fetch(`${apiUrl}/api/v1/ai/expenses`, { cache: "no-store" });
-  if (!response.ok) throw new Error("SnapAI could not load your expenses.");
+  const response = await fetch(`${apiUrl}/api/v1/ai/expenses`, { cache: "no-store", headers: getAuthHeaders() });
+  handleApiResponse(response, "SnapAI could not load your expenses.");
   return response.json() as Promise<ExpenseListResponse>;
 }
 
 export async function getExpenseSummary(): Promise<ExpensePeriodSummary> {
   const apiUrl = await getApiUrl();
-  const response = await fetch(`${apiUrl}/api/v1/ai/expenses-summary`, { cache: "no-store" });
-  if (!response.ok) throw new Error("SnapAI could not load your expense summary.");
+  const response = await fetch(`${apiUrl}/api/v1/ai/expenses-summary`, { cache: "no-store", headers: getAuthHeaders() });
+  handleApiResponse(response, "SnapAI could not load your expense summary.");
   return response.json() as Promise<ExpensePeriodSummary>;
 }
