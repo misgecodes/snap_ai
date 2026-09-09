@@ -58,9 +58,3 @@ def run_receipt_graph(image_url: str) -> dict:
         "currency": "",
     })
 
-
-if __name__ == "__main__":
-    # Manual test run — only executes when you run this file directly,
-    test_url = "https://res.cloudinary.com/dxluyadpx/image/upload/v1788460571/ChatGPT_Image_Sep_3_2026_08_35_09_PM_fww8cp.png"
-    result = run_receipt_graph(test_url)
-    print(result)
