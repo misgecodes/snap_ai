@@ -13,6 +13,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
+
+def _parse_expense_date(raw_date: str | None) -> date | None:
+    if not raw_date:
+        return None
+    try:
+        return date.fromisoformat(raw_date)
+    except ValueError:
+        logger.warning("Could not parse date value: %r — storing as None", raw_date)
+        return None
+
+
 @router.post("/process-expense", response_model=ExpenseProcessResponse)
 def process_receipt_endpoint(
     payload: ExpenseProcessRequest,
@@ -37,11 +48,7 @@ def process_receipt_endpoint(
             amount=expense_data.amount,
             category=expense_data.category,
             currency=expense_data.currency,
-            expense_date=(
-                date.fromisoformat(expense_data.date)
-                if expense_data.date
-                else None
-            ),
+            expense_date=_parse_expense_date(expense_data.date),
         )
         logger.info("AI result validated and converted to an expense record")
     except Exception as exc:
@@ -62,3 +69,7 @@ def process_receipt_endpoint(
         raise HTTPException(status_code=500, detail=f"Expense persistence failed: {exc}") from exc
 
     return result
+
+
+
+
