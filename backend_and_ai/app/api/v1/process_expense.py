@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 from collections import defaultdict
-
+from app.utils.parsing import _parse_expense_date, normalize_currency
 from app.db.session import get_db
 from app.models.expense import Expense
 from app.schemas.expense import (
@@ -24,14 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ai", tags=["ai"])
 
 
-def _parse_expense_date(raw_date: str | None) -> date | None:
-    if not raw_date:
-        return None
-    try:
-        return date.fromisoformat(raw_date)
-    except ValueError:
-        logger.warning("Could not parse date value: %r — storing as None", raw_date)
-        return None
+
 
 
 @router.post("/process-expense", response_model=ExpenseProcessResponse)
@@ -59,7 +52,7 @@ def process_receipt_endpoint(
             reason=expense_data.reason,
             amount=expense_data.amount,
             category=expense_data.category,
-            currency=expense_data.currency,
+            currency=normalize_currency(expense_data.currency),
             expense_date=_parse_expense_date(expense_data.date),
         )
         logger.info("AI result validated and converted to an expense record")

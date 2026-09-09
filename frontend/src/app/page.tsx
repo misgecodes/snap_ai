@@ -12,13 +12,19 @@ import {
   ReceiptText,
   Settings,
   Sparkles,
+  Send,
   Upload,
   WalletCards,
   X,
 } from "lucide-react";
 import { startTransition, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getExpenseSummary, getExpenses, processExpense } from "@/services/ai";
+import {
+  askExpenses,
+  getExpenseSummary,
+  getExpenses,
+  processExpense,
+} from "@/services/ai";
 import { uploadReceipt } from "@/services/cloudinary";
 import { getCurrentUser, logout, type UserProfile } from "@/services/auth";
 import type {
@@ -29,6 +35,15 @@ import type {
 } from "@/types/expense";
 
 type FlowState = "idle" | "uploading" | "processing" | "success" | "error";
+
+const exampleQuestions = [
+  "How much did I spend on food this month?",
+  "What's my biggest expense?",
+  "When did I start tracking expenses?",
+  "How much did I spend on transportation?",
+  "Where did I spend the most this month?",
+  "How much did I spend last week?",
+];
 
 const categoryStyles: Record<string, string> = {
   "Food & Dining": "bg-[#fff0e8] text-[#e45b35]",
@@ -88,6 +103,14 @@ export default function Home() {
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [askQuestion, setAskQuestion] = useState("");
+  const [submittedQuestion, setSubmittedQuestion] = useState("");
+  const [askAnswer, setAskAnswer] = useState("");
+  const [askError, setAskError] = useState("");
+  const [isAsking, setIsAsking] = useState(false);
+  const [exampleIndex, setExampleIndex] = useState(0);
+  const [typedExample, setTypedExample] = useState("");
+  const [isErasingExample, setIsErasingExample] = useState(false);
   const resetFlow = () => {
     setFlowState("idle");
     setResult(null);
@@ -129,6 +152,26 @@ export default function Home() {
       });
   }, []);
 
+  useEffect(() => {
+    const currentExample = exampleQuestions[exampleIndex];
+    const timer = window.setTimeout(() => {
+      if (isErasingExample) {
+        if (typedExample) {
+          setTypedExample((value) => value.slice(0, -1));
+        } else {
+          setExampleIndex((index) => (index + 1) % exampleQuestions.length);
+          setIsErasingExample(false);
+        }
+      } else if (typedExample.length < currentExample.length) {
+        setTypedExample(currentExample.slice(0, typedExample.length + 1));
+      } else {
+        setIsErasingExample(true);
+      }
+    }, isErasingExample ? 35 : typedExample.length === currentExample.length ? 1800 : 55);
+
+    return () => window.clearTimeout(timer);
+  }, [exampleIndex, isErasingExample, typedExample]);
+
   const handleFile = async (file?: File) => {
     if (!file || flowState === "uploading" || flowState === "processing")
       return;
@@ -155,6 +198,29 @@ export default function Home() {
         error instanceof Error ? error.message : "Please try again.",
       );
       setFlowState("error");
+    }
+  };
+
+  const handleAsk = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const question = askQuestion.trim();
+    if (!question || isAsking || expenses.length === 0) return;
+
+    setIsAsking(true);
+    setSubmittedQuestion(question);
+    setAskAnswer("");
+    setAskError("");
+    try {
+      const response = await askExpenses(question);
+      setAskAnswer(response.answer);
+    } catch (error) {
+      setAskError(
+        error instanceof Error
+          ? error.message
+          : "SnapAI could not answer that question. Please try again.",
+      );
+    } finally {
+      setIsAsking(false);
     }
   };
 
@@ -437,6 +503,7 @@ export default function Home() {
                 </div>
               )}{" "}
             </div>
+            {/* Monthly budget card is paused until budget data is available from the backend.
             <div className="rounded-2xl border border-[#deded9] bg-white p-6 sm:p-8">
               <div className="flex items-start justify-between">
                 <div>
@@ -463,8 +530,94 @@ export default function Home() {
                     : "Loading..."}
                 </span>
               </div>
-            </div>
+            </div> */}
           </div>
+          <section id="ask-expenses" className="mt-10">
+            <div className="mb-4">
+              <h2 className="font-serif text-[25px] tracking-[-0.04em]">
+                Ask your expenses
+              </h2>
+              <p className="mt-1 text-[12px] text-[#929594]">
+                Ask a question about your spending and SnapAI will find the answer.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#deded9] bg-white p-5 sm:p-6">
+              {!isDataLoaded ? (
+                <div className="flex items-center gap-3 rounded-xl bg-[#f6f5f2] p-4 text-[12px] text-[#929594]">
+                  <LoaderCircle size={17} className="animate-spin text-[#f2532f]" />
+                  Loading your expense history...
+                </div>
+              ) : expenses.length === 0 ? (
+                <div className="flex items-start gap-3 rounded-xl bg-[#f6f5f2] p-4">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#fff0e8] text-[#f2532f]">
+                    <Sparkles size={17} />
+                  </div>
+                  <div>
+                    <p className="text-[13px] font-bold">Start tracking to ask questions</p>
+                    <p className="mt-1 text-[12px] leading-5 text-[#929594]">
+                      Upload your first receipt and SnapAI will be ready to answer questions about your spending.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <form onSubmit={handleAsk}>
+                    <label htmlFor="ask-expenses-question" className="sr-only">
+                      Ask a question about your expenses
+                    </label>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <input
+                        id="ask-expenses-question"
+                        value={askQuestion}
+                        onChange={(event) => {
+                          setAskQuestion(event.target.value);
+                          setAskError("");
+                        }}
+                        placeholder="Ask about your spending..."
+                        disabled={isAsking}
+                        className="min-w-0 flex-1 rounded-xl border border-[#deded9] bg-[#fdfdfc] px-4 py-3 text-[13px] outline-none transition placeholder:text-[#a3a5a2] focus:border-[#f2532f] focus:ring-2 focus:ring-[#f2532f]/10 disabled:cursor-wait disabled:opacity-70"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isAsking || !askQuestion.trim()}
+                        className="flex items-center justify-center gap-2 rounded-xl bg-[#f2532f] px-5 py-3 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(242,83,47,0.18)] transition hover:-translate-y-0.5 hover:bg-[#dc4526] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+                      >
+                        {isAsking ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}
+                        {isAsking ? "Thinking..." : "Ask"}
+                      </button>
+                    </div>
+                  </form>
+                  <button
+                    type="button"
+                    onClick={() => setAskQuestion(exampleQuestions[exampleIndex])}
+                    className="mt-3 flex max-w-full items-center gap-2 text-left text-[11px] text-[#929594] hover:text-[#f2532f]"
+                    aria-label={`Use example question: ${typedExample}`}
+                  >
+                    <Sparkles size={13} className="shrink-0 text-[#f2532f]" />
+                    <span className="truncate">Try: {typedExample}<span className="text-[#f2532f]">|</span></span>
+                  </button>
+                  {(askError || isAsking) && (
+                    <div className="mt-4 rounded-xl bg-[#f6f5f2] px-4 py-3 text-[12px] text-[#777b7e]">
+                      {isAsking ? (
+                        <span className="flex items-center gap-2"><span className="flex gap-1"><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#f2532f]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#f2532f] [animation-delay:120ms]" /><span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#f2532f] [animation-delay:240ms]" /></span> SnapAI is thinking...</span>
+                      ) : askError}
+                    </div>
+                  )}
+                  {askAnswer && !isAsking && (
+                    <div className="mt-5 space-y-3">
+                      <div className="ml-auto max-w-[88%] rounded-2xl rounded-br-md bg-[#18212b] px-4 py-3 text-[12px] leading-5 text-white">
+                        {submittedQuestion}
+                      </div>
+                      <div className="flex max-w-[88%] items-start gap-2 rounded-2xl rounded-bl-md bg-[#f6f5f2] px-4 py-3 text-[12px] leading-5 text-[#4f5558]">
+                        <Sparkles size={14} className="mt-0.5 shrink-0 text-[#f2532f]" />
+                        <p>{askAnswer}</p>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </section>
           <div id="activity" className="mt-10">
             <div className="mb-4 flex items-center justify-between">
               <div>

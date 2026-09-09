@@ -1,4 +1,12 @@
-import type { ExpenseListResponse, ExpensePeriodSummary, ProcessExpenseResponse } from "@/types/expense";
+import type {
+  ExpenseListResponse,
+  ExpensePeriodSummary,
+  ProcessExpenseResponse,
+} from "@/types/expense";
+
+export interface AskExpensesResponse {
+  answer: string;
+}
 
 async function getApiUrl() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -46,4 +54,15 @@ export async function getExpenseSummary(): Promise<ExpensePeriodSummary> {
   const response = await fetch(`${apiUrl}/api/v1/ai/expenses-summary`, { cache: "no-store", headers: getAuthHeaders() });
   handleApiResponse(response, "SnapAI could not load your expense summary.");
   return response.json() as Promise<ExpensePeriodSummary>;
+}
+
+export async function askExpenses(question: string): Promise<AskExpensesResponse> {
+  const apiUrl = await getApiUrl();
+  const response = await fetch(`${apiUrl}/api/v1/ai/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+    body: JSON.stringify({ question }),
+  });
+  handleApiResponse(response, "SnapAI could not answer that question.");
+  return response.json() as Promise<AskExpensesResponse>;
 }
