@@ -1,20 +1,12 @@
 "use client";
 
-import { ArrowUpRight, Check, ChevronDown, CircleHelp, FileImage, LayoutDashboard, LoaderCircle, Plus, ReceiptText, ScanLine, Settings, Sparkles, Upload, WalletCards, X } from "lucide-react";
-import { useRef, useState } from "react";
-import { processReceipt } from "@/services/ai";
+import { ArrowUpRight, Check, ChevronDown, CircleHelp, FileImage, LayoutDashboard, LoaderCircle, Plus, ReceiptText, Settings, Sparkles, Upload, WalletCards, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { getExpenses, processExpense } from "@/services/ai";
 import { uploadReceipt } from "@/services/cloudinary";
-import type { Expense, ProcessReceiptResponse } from "@/types/expense";
+import type { CategorySummary, Expense, ProcessExpenseResponse } from "@/types/expense";
 
 type FlowState = "idle" | "uploading" | "processing" | "success" | "error";
-
-const starterExpenses: Expense[] = [
-  { id: "1", merchant: "Starbucks", reason: "Coffee", amount: 5.5, category: "Food & Dining", currency: "USD", date: "Today" },
-  { id: "2", merchant: "Uber", reason: "Ride", amount: 18.2, category: "Transport", currency: "USD", date: "Today" },
-  { id: "3", merchant: "Amazon", reason: "Household supplies", amount: 42, category: "Shopping", currency: "USD", date: "Yesterday" },
-  { id: "4", merchant: "Whole Foods", reason: "Groceries", amount: 63.75, category: "Groceries", currency: "USD", date: "Yesterday" },
-  { id: "5", merchant: "Spotify", reason: "Monthly plan", amount: 11.99, category: "Subscriptions", currency: "USD", date: "Mon" },
-];
 
 const categoryStyles: Record<string, string> = {
   "Food & Dining": "bg-[#fff0e8] text-[#e45b35]", Transport: "bg-[#e9f1f8] text-[#3d6588]", Shopping: "bg-[#f0ebfa] text-[#7454a5]", Groceries: "bg-[#e8f4ed] text-[#377957]", Subscriptions: "bg-[#f1f0ed] text-[#65645d]",
@@ -22,7 +14,12 @@ const categoryStyles: Record<string, string> = {
 
 function formatAmount(amount: number | null, currency: string | null) {
   if (amount === null || amount === undefined) return "—";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "USD" }).format(amount);
+  const currencyCode = currency === "$" ? "USD" : currency || "USD";
+  try {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: currencyCode }).format(amount);
+  } catch {
+    return `${currency || "USD"} ${amount.toFixed(2)}`;
+  }
 }
 
 function categoryClass(category: string | null) { return categoryStyles[category || ""] || "bg-[#f1f0ed] text-[#65645d]"; }
@@ -31,11 +28,21 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [flowState, setFlowState] = useState<FlowState>("idle");
-  const [result, setResult] = useState<ProcessReceiptResponse | null>(null);
-  const [expenses, setExpenses] = useState(starterExpenses);
+  const [result, setResult] = useState<ProcessExpenseResponse | null>(null);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [summary, setSummary] = useState<CategorySummary[]>([]);
   const [errorStage, setErrorStage] = useState<FlowState>("error");
   const [errorMessage, setErrorMessage] = useState("");
   const resetFlow = () => { setFlowState("idle"); setResult(null); setErrorMessage(""); setIsSheetOpen(false); };
+
+  useEffect(() => {
+    getExpenses().then(({ expenses: loadedExpenses, summary: loadedSummary }) => {
+      setExpenses(loadedExpenses);
+      setSummary(loadedSummary);
+    }).catch((error) => {
+      setErrorMessage(error instanceof Error ? error.message : "Could not load expenses.");
+    });
+  }, []);
 
   const handleFile = async (file?: File) => {
     if (!file || flowState === "uploading" || flowState === "processing") return;
@@ -45,8 +52,9 @@ export default function Home() {
       const imageUrl = await uploadReceipt(file);
       currentStage = "processing";
       setFlowState("processing");
-      const expense = await processReceipt(imageUrl);
-      setResult(expense); setExpenses((current) => [{ ...expense, id: crypto.randomUUID() }, ...current]); setFlowState("success");
+      const expense = await processExpense(imageUrl);
+      const persisted = await getExpenses();
+      setResult(expense); setExpenses(persisted.expenses); setSummary(persisted.summary); setFlowState("success");
     } catch (error) {
       setErrorStage(currentStage);
       setErrorMessage(error instanceof Error ? error.message : "Please try again.");
@@ -62,8 +70,8 @@ export default function Home() {
 
       <section id="overview" className="min-w-0"><div className="mb-9 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-[13px] text-[#797d80]">Monday, September 8, 2026</p><h1 className="font-serif text-[clamp(2.2rem,5vw,3.7rem)] leading-none tracking-[-0.055em] text-[#18212b]">Good morning, Jamie <span className="text-[0.8em]">✦</span></h1><p className="mt-3 max-w-md text-[14px] leading-6 text-[#777b7e]">Your spending, made simple. Snap a receipt and let AI keep things clear.</p></div><button onClick={() => setIsSheetOpen(true)} className="group flex w-full items-center justify-center gap-2 rounded-xl bg-[#f2532f] px-5 py-3.5 text-[13px] font-bold text-white shadow-[0_8px_18px_rgba(242,83,47,0.18)] transition hover:-translate-y-0.5 hover:bg-[#dc4526] sm:w-auto"><Plus size={17} /> Add expense <ArrowUpRight size={15} className="ml-1 opacity-60" /></button></div>
         <div className="grid gap-4 md:grid-cols-[1.15fr_0.85fr]"><div className="relative overflow-hidden rounded-2xl bg-[#18212b] p-6 text-white sm:p-8"><div className="relative z-10"><div className="mb-10 flex items-center justify-between"><p className="text-[12px] text-[#b8c0c5]">Spent this month</p><span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-semibold text-[#d4dcdf]">Sep 2026</span></div><p className="font-serif text-[clamp(2.8rem,6vw,4.5rem)] leading-none tracking-[-0.06em]">$482<span className="text-[#f2532f]">.50</span></p><div className="mt-7 flex items-center gap-2 text-[12px] text-[#aeb8bd]"><span className="flex items-center gap-1 font-semibold text-[#77d3a0]"><ArrowUpRight size={14} /> 8.4%</span> <span>vs. last month</span></div></div><div className="absolute -right-9 -top-16 h-56 w-56 rounded-full border-[26px] border-[#24323d]" /></div><div className="rounded-2xl border border-[#deded9] bg-white p-6 sm:p-8"><div className="flex items-start justify-between"><div><p className="text-[12px] text-[#797d80]">Monthly budget</p><p className="mt-3 font-serif text-4xl tracking-[-0.06em]">$1,200</p></div><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#fff0e8] text-[#f2532f]"><WalletCards size={17} /></div></div><div className="mt-7 h-2 overflow-hidden rounded-full bg-[#f0efeb]"><div className="h-full w-[40%] rounded-full bg-[#f2532f]" /></div><div className="mt-3 flex justify-between text-[11px] text-[#888b8c]"><span>$482.50 used</span><span>$717.50 left</span></div></div></div>
-        <div id="activity" className="mt-10"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-serif text-[25px] tracking-[-0.04em]">Recent activity</h2><p className="mt-1 text-[12px] text-[#929594]">Your latest captured expenses</p></div><button className="flex items-center gap-1.5 text-[12px] font-semibold text-[#f2532f]">View all <ArrowUpRight size={14} /></button></div><div className="overflow-hidden rounded-2xl border border-[#deded9] bg-white"><div className="hidden grid-cols-[1fr_150px_100px] border-b border-[#eeeDE9] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.1em] text-[#a0a19d] sm:grid"><span>Merchant</span><span>Category</span><span className="text-right">Amount</span></div>{expenses.slice(0, 5).map((expense, index) => <div key={expense.id} className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-[#eeeDE9] px-4 py-4 last:border-0 sm:grid-cols-[1fr_150px_100px] sm:px-5"><div className="flex min-w-0 items-center gap-3"><div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${categoryClass(expense.category)}`}><ReceiptText size={16} /></div><div className="min-w-0"><p className="truncate text-[13px] font-bold">{expense.merchant || "Unknown merchant"}</p><p className="truncate text-[11px] text-[#969997]">{expense.reason || expense.date || "Captured expense"} · {index < 2 ? "Today" : expense.date}</p></div></div><span className={`hidden w-fit rounded-full px-2.5 py-1 text-[10px] font-semibold sm:block ${categoryClass(expense.category)}`}>{expense.category || "Uncategorized"}</span><p className="text-right text-[13px] font-bold">{formatAmount(expense.amount, expense.currency)}</p></div>)}</div></div>
-        <div id="insights" className="mt-10 grid gap-4 md:grid-cols-2"><div className="rounded-2xl bg-[#e8f1ec] p-6"><div className="mb-7 flex items-center justify-between"><p className="text-[12px] font-bold text-[#376b50]">Smart insight</p><Sparkles size={17} className="text-[#4c9a70]" /></div><p className="max-w-sm font-serif text-[23px] leading-tight tracking-[-0.04em] text-[#234934]">You’re spending less on dining out this month.</p><p className="mt-3 text-[12px] leading-5 text-[#528067]">Keep it up. You’re 18% below your average.</p></div><div className="rounded-2xl bg-[#fff0e8] p-6"><div className="mb-7 flex items-center justify-between"><p className="text-[12px] font-bold text-[#a84a31]">Quick capture</p><ScanLine size={17} className="text-[#f2532f]" /></div><p className="max-w-sm font-serif text-[23px] leading-tight tracking-[-0.04em] text-[#793622]">Have a receipt? Let’s make it count.</p><button onClick={() => setIsSheetOpen(true)} className="mt-4 text-[12px] font-bold text-[#f2532f] underline decoration-[#f2532f]/30 underline-offset-4">Scan one now</button></div></div>
+        <div id="activity" className="mt-10"><div className="mb-4 flex items-center justify-between"><div><h2 className="font-serif text-[25px] tracking-[-0.04em]">Recent activity</h2><p className="mt-1 text-[12px] text-[#929594]">Your latest captured expenses</p></div><button className="flex items-center gap-1.5 text-[12px] font-semibold text-[#f2532f]">View all <ArrowUpRight size={14} /></button></div><div className="overflow-hidden rounded-2xl border border-[#deded9] bg-white"><div className="hidden grid-cols-[1fr_150px_100px] border-b border-[#eeeDE9] px-5 py-3 text-[10px] font-bold uppercase tracking-[0.1em] text-[#a0a19d] sm:grid"><span>Merchant</span><span>Category</span><span className="text-right">Amount</span></div>{expenses.slice(0, 5).map((expense) => <div key={expense.id} className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-[#eeeDE9] px-4 py-4 last:border-0 sm:grid-cols-[1fr_150px_100px] sm:px-5"><div className="flex min-w-0 items-center gap-3"><div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${categoryClass(expense.category)}`}><ReceiptText size={16} /></div><div className="min-w-0"><p className="truncate text-[13px] font-bold">{expense.merchant || "Unknown merchant"}</p><p className="truncate text-[11px] text-[#969997]">{expense.reason || expense.expense_date || "Captured expense"} · {expense.expense_date || expense.created_at.slice(0, 10)}</p></div></div><span className={`hidden w-fit rounded-full px-2.5 py-1 text-[10px] font-semibold sm:block ${categoryClass(expense.category)}`}>{expense.category || "Uncategorized"}</span><p className="text-right text-[13px] font-bold">{formatAmount(expense.amount, expense.currency)}</p></div>)}</div></div>
+        <div id="insights" className="mt-10"><div className="mb-4"><h2 className="font-serif text-[25px] tracking-[-0.04em]">Category summary</h2><p className="mt-1 text-[12px] text-[#929594]">Totals and counts from your saved expenses</p></div><div className="grid gap-4 sm:grid-cols-2">{summary.map((item) => <div key={item.category} className="rounded-2xl border border-[#deded9] bg-white p-5"><div className="flex items-start justify-between gap-4"><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${categoryClass(item.category)}`}>{item.category}</span><span className="text-[12px] font-semibold text-[#797d80]">{item.count} {item.count === 1 ? "expense" : "expenses"}</span></div><div className="mt-5 space-y-2">{Object.entries(item.totals_by_currency).map(([currency, total]) => <div key={currency} className="flex items-center justify-between text-[13px]"><span className="text-[#797d80]">{currency}</span><span className="font-bold">{formatAmount(total, currency)}</span></div>)}</div></div>)}</div>{summary.length === 0 && <div className="rounded-2xl border border-dashed border-[#deded9] bg-white p-6 text-center text-[13px] text-[#929594]">Category totals will appear after your first expense.</div>}</div>
       </section></div>
 
     {isSheetOpen && <div className="fixed inset-0 z-40 flex items-end justify-center bg-[#18212b]/30 p-0 backdrop-blur-[2px] sm:items-center sm:p-6" onClick={() => setIsSheetOpen(false)}><div role="dialog" aria-modal="true" aria-labelledby="add-expense-title" className="w-full max-w-[480px] rounded-t-[28px] bg-white p-6 shadow-2xl sm:rounded-[26px] sm:p-8" onClick={(event) => event.stopPropagation()}><div className="mb-7 flex items-center justify-between"><div><p className="mb-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[#f2532f]">Capture</p><h2 id="add-expense-title" className="font-serif text-3xl tracking-[-0.05em]">Add an expense</h2></div><button aria-label="Close" onClick={() => setIsSheetOpen(false)} className="rounded-full bg-[#f4f3f0] p-2 text-[#777b7e]"><X size={18} /></button></div><div className="grid grid-cols-2 gap-3"><button onClick={() => fileInputRef.current?.click()} className="group flex min-h-[148px] flex-col items-start justify-between rounded-2xl bg-[#fff0e8] p-4 text-left transition hover:bg-[#ffe5da]"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#f2532f]"><Upload size={18} /></div><span className="text-[14px] font-bold text-[#793622]">Upload receipt<span className="mt-1 block text-[11px] font-normal text-[#aa6b58]">JPG, PNG or HEIC</span></span></button><button onClick={() => fileInputRef.current?.click()} className="group flex min-h-[148px] flex-col items-start justify-between rounded-2xl bg-[#f3f5f5] p-4 text-left transition hover:bg-[#ebeeee]"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#4e6770]"><FileImage size={18} /></div><span className="text-[14px] font-bold">Choose from files<span className="mt-1 block text-[11px] font-normal text-[#8b9293]">Your camera roll</span></span></button></div><p className="mt-5 flex items-center gap-2 text-[11px] leading-5 text-[#969997]"><Sparkles size={13} className="shrink-0 text-[#f2532f]" /> SnapAI reads the details and sorts everything for you.</p></div></div>}
