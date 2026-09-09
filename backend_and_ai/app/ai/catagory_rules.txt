@@ -35,13 +35,17 @@ Transfers to savings accounts, investments, stocks, funds, or other wealth-build
 ## Mobile Money/Bank Fees
 Mobile money charges, bank fees, transfer fees, ATM fees, and currency exchange fees.
 
+## Transfers
+Sending or receiving money to/from another person, mobile money/MB transfers, bank transfers to individuals, remittances. Not a purchase from a merchant — money moving between people.
+
 ## Miscellaneous/Uncategorized/Other
 Use when a transaction does not clearly fit any other category.
 
 ### Rules
 1. Choose the most appropriate category based on the available transaction context.
-2. Prefer the transaction description over assumptions based only on the merchant name.
-3. Categorize business-related spending as Business/Work when the business purpose is clear.
-4. Categorize money moved between accounts as Savings/Investments when intended for saving/investing; otherwise treat as a transfer.
-5. Do not classify income as an expense.
-6. If uncertain or no category clearly applies, use Miscellaneous/Uncategorized rather than guessing.
+2. Use the transaction description as the primary signal when it provides clear context. When the description is insufficient, use the merchant name as an additional signal.
+3. Recognize recurring subscriptions based on the merchant name and transaction context. Known subscription providers, particularly software, technology, streaming, cloud, and digital-service companies, should generally be categorized as Subscriptions when the transaction appears to be a recurring service payment.
+4. Categorize business-related spending as Business/Work when the business purpose is clear, even if the merchant itself could normally belong to another category.
+5. Categorize money moved between accounts as Savings/Investments when intended for saving/investing; otherwise treat as a transfer.
+6. Do not classify income as an expense.
+7. If uncertain or no category clearly applies, use Miscellaneous/Uncategorized rather than guessing.

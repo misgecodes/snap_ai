@@ -1,0 +1,98 @@
+
+[
+
+ {
+    "image_url": "https://res.cloudinary.com/dxluyadpx/image/upload/v1788979436/130.79Euro-to-belkis_t4trsb.jpg",
+    "true_merchant": "Belkis Elias Hassen",
+    "true_amount": 130.79,
+    "true_currency": "EUR",
+    "true_date": null,
+    "true_category": "Transfers",
+    "notes": "sending to dukascopy bank"
+  },
+
+  {
+    "image_url": "https://res.cloudinary.com/dxluyadpx/image/upload/v1788979043/113_000RWF-to-a-number_vzarcg.jpg",
+    "true_merchant": "account number",
+    "true_amount": 113000,
+    "true_currency": "RWF",
+    "true_date": null,
+    "true_category": "Transfers",
+    "notes": "unknown"
+  },
+  {
+    "image_url": "https://res.cloudinary.com/dxluyadpx/image/upload/v1788979062/11_115ETB-to-alemu_nfp7yh.jpg",
+    "true_merchant": "Alemu Berihun Samuel",
+    "true_amount": 11115,
+    "true_currency": "ETB",
+    "true_date": "2026-08-05",
+    "true_category": "Transfers",
+    "notes": "MB"
+  },
+
+
+  {
+    "image_url": "https://res.cloudinary.com/dxluyadpx/image/upload/v1788979068/5000RWF-to-a-numbeer_hkdlwj.jpg",
+    "true_merchant": "account number",
+    "true_amount": 5000,
+    "true_currency": "RWF",
+    "true_date": null,
+    "true_category": "Transfers",
+    "notes": "unknown"    
+  },
+
+
+  {
+    "image_url": "https://res.cloudinary.com/dxluyadpx/image/upload/v1788979086/7330ETB-to-naol_hrze5c.jpg",
+    "true_merchant": "Naol Abera Eticha",
+    "true_amount": 7330,
+    "true_currency": "ETB",
+    "true_date": "2026-08-20",
+    "true_category": "Transfers",
+    "notes": "MB"
+  },
+
+
+  {
+    "image_url": "https://res.cloudinary.com/dxluyadpx/image/upload/v1788979097/2600ETB-to-eyerusalem_mwtktr.jpg",
+    "true_merchant": "Eyerusalem Getachew Nigatu",
+    "true_amount": 2600,
+    "true_currency": "ETB",
+    "true_date": "2026-08-23",
+    "true_category": "Transfers",
+    "notes": "MB"
+  },
+
+
+  {
+    "image_url": "https://res.cloudinary.com/dxluyadpx/image/upload/v1788979170/2.99-netflix-bills-subscription_ubbvhe.jpg",
+    "true_merchant": "Netflix",
+    "true_amount": 2.99,
+    "true_currency": "USD",
+    "true_date": "2026-08-03",
+    "true_category": "Subscriptions",
+    "notes": "bills"
+  },
+
+
+  {
+    "image_url": "https://res.cloudinary.com/dxluyadpx/image/upload/v1788979189/8.40-usd-google-workspace-bill_ivu6uh.jpg",
+    "true_merchant": "Google Workspace Beblscar",
+    "true_amount": 8.40,
+    "true_currency": "USD",
+    "true_date": "2026-08-01",
+    "true_category": "Subscriptions",
+    "notes": "bills"
+  },
+
+
+  {
+    "image_url": "https://res.cloudinary.com/dxluyadpx/image/upload/v1788979206/5-usd-openai-shoping_wgxupq.jpg",
+    "true_merchant": "OpenAI",
+    "true_amount": 5,
+    "true_currency": "USD",
+    "true_date": "2026-08-29",
+    "true_category": "Subscriptions",
+    "notes": "shopping"
+  }
+]
