@@ -124,3 +124,9 @@ websockets==16.1.1
 xxhash==4.0.1
 yarl==1.24.5
 zstandard==0.25.0
+cffi==2.1.1
+cryptography==50.0.1
+google-auth==2.58.0
+pyasn1==0.6.4
+pyasn1_modules==0.4.2
+pycparser==3.0
